@@ -1,7 +1,7 @@
 {
   "name": "payeasy",
   "version": "1.0.0",
-  "description": "**Blockchain-powered rent sharing made simple.**",
+  "description": "Blockchain-powered rent sharing made simple.",
   "homepage": "https://github.com/Ogstevyn/payeasy#readme",
   "bugs": {
     "url": "https://github.com/Ogstevyn/payeasy/issues"
@@ -12,13 +12,22 @@
   },
   "license": "ISC",
   "author": "",
-  "type": "commonjs",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs"
-  },
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "contracts/*"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "format": "turbo run format",
+    "type-check": "turbo run type-check",
+    "clean": "turbo run clean && rm -rf node_modules"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "turbo": "latest"
+  },
+  "packageManager": "npm@10.0.0"
 }
