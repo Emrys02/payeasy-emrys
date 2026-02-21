@@ -18,10 +18,20 @@ export interface Listing {
   updated_at: string;
 }
 
-export interface ListingAmenity {
-  listing_id: string;
-  amenity: string;
-}
+export type {
+  // Database models
+  Listing,
+  ListingRow,
+  ListingInsert,
+  ListingUpdate,
+  ListingAmenity,
+  ListingAmenityRow,
+  ListingAmenityInsert,
+  ListingWithLandlord,
+  ListingWithAmenities,
+  ListingDetail,
+  ListingStatus,
+} from '@/lib/types/database'
 
 export interface ListingSearchParams {
   minPrice?: number;
