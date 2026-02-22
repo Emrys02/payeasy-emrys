@@ -130,9 +130,6 @@ function extractGasFromSimulation(simulation: any): GasEstimate | null {
   return {
     stroops: minResourceFee,
     source: "simulateTransaction",
-    cpuInstructions: Number(transactionData?.resources?.()?.instructions?.() ?? 0),
-    readBytes: Number(transactionData?.resources?.()?.readBytes?.() ?? 0),
-    writeBytes: Number(transactionData?.resources?.()?.writeBytes?.() ?? 0),
     cpuInstructions: Number((transactionData as any)?.resources?.()?.instructions?.() ?? 0),
     readBytes: Number((transactionData as any)?.resources?.()?.readBytes?.() ?? 0),
     writeBytes: Number((transactionData as any)?.resources?.()?.writeBytes?.() ?? 0),
@@ -218,8 +215,6 @@ export async function buildContractTransaction(
 
   const simulation = await server.simulateTransaction(initialTransaction);
   const simulationGasEstimate = extractGasFromSimulation(simulation as any);
-  const simulationGasEstimate =
-    "minResourceFee" in simulation ? extractGasFromSimulation(simulation) : null;
   const rpcGasEstimate = await estimateGasViaRpcMethod(rpcUrl, initialTransaction.toXDR());
 
   const gasStroops = rpcGasEstimate?.stroops ?? simulationGasEstimate?.stroops ?? 0;
@@ -256,13 +251,13 @@ export async function buildContractTransaction(
       .addOperation(contract.call(params.method, ...args))
       .setTimeout(params.timeoutSeconds ?? 60)
       .build();
-    
+
     // Note: Re-preparing or re-assembling might be needed if resource limits change, 
     // but usually, they are stable for the same call.
     if (typeof rpcWithAssembler.assembleTransaction === "function") {
-       preparedTransaction = rpcWithAssembler.assembleTransaction(preparedTransaction, simulation).build();
+      preparedTransaction = rpcWithAssembler.assembleTransaction(preparedTransaction, simulation).build();
     } else if (typeof prepareTransaction === "function") {
-       preparedTransaction = await prepareTransaction(preparedTransaction);
+      preparedTransaction = await prepareTransaction(preparedTransaction);
     }
   }
 
@@ -291,11 +286,8 @@ export async function signContractTransaction(
     }
 
     if (signed && typeof signed === "object") {
-      const signedObj = signed as any;
-    // Cast signed to unknown to safely check properties on it
-    const signedObj = signed as unknown as Record<string, unknown>;
+      const signedObj = signed as unknown as Record<string, unknown>;
 
-    if (signedObj && typeof signedObj === "object") {
       if ("error" in signedObj && typeof signedObj.error === "string" && signedObj.error.length > 0) {
         throw new Error(signedObj.error);
       }
@@ -525,7 +517,6 @@ export async function getNetworkTransactionStatus(
     const tx = await horizonServer.transactions().transaction(transactionHash).call();
     return {
       status: tx.successful ? "success" : "failed",
-      ledger: tx.ledger as any as number,
       ledger: tx.ledger_attr as number | undefined,
     };
   } catch {
