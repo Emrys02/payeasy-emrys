@@ -2,8 +2,7 @@
 
 import { ArrowLeftCircle, Wallet } from "lucide-react";
 import { RegisterFormData, registerSchema } from "@/lib/validators/auth";
-import { getPublicKey, setAllowed } from "@stellar/freighter-api";
-
+import { useEffect, useState } from "react";
 import AuthButton from "@/components/forms/AuthButton";
 import AuthInput from "@/components/forms/AuthInput";
 import FormError from "@/components/forms/FormError";
@@ -11,13 +10,35 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useWallet } from "@/hooks/useWallet";
 import { zodResolver } from "@hookform/resolvers/zod";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export default function RegisterPage() {
   const router = useRouter();
   const [error, setError] = useState<string | undefined>("");
-  const [isWalletConnecting, setIsWalletConnecting] = useState(false);
+
+  let isConnected: boolean;
+  let walletPublicKey: string | null;
+  let connect: () => Promise<void>;
+  let isWalletConnecting: boolean;
+
+  try {
+    const wallet = useWallet();
+    isConnected = wallet.isConnected;
+    walletPublicKey = wallet.publicKey;
+    connect = wallet.connect;
+    isWalletConnecting = wallet.isInitializing;
+  } catch {
+    // During build, provider might not be available
+    isConnected = false;
+    walletPublicKey = null;
+    connect = async () => {};
+    isWalletConnecting = false;
+  }
+
   const supabase = createClient();
 
   const {
@@ -34,21 +55,19 @@ export default function RegisterPage() {
   const walletAddress = watch("walletAddress");
 
   const connectWallet = async () => {
-    setIsWalletConnecting(true);
     try {
-      const allowed = await setAllowed();
-      if (allowed) {
-        const key = await getPublicKey();
-        setValue("walletAddress", key);
-      } else {
-        setError("Wallet access denied");
-      }
-    } catch (e) {
+      await connect();
+    } catch {
       setError("Failed to connect wallet");
-    } finally {
-      setIsWalletConnecting(false);
     }
   };
+
+  // Sync wallet public key into form when it changes
+  useEffect(() => {
+    if (walletPublicKey) {
+      setValue("walletAddress", walletPublicKey);
+    }
+  }, [walletPublicKey, setValue]);
 
   const onSubmit = async (data: RegisterFormData) => {
     setError("");
@@ -153,7 +172,7 @@ export default function RegisterPage() {
                 <button
                   type="button"
                   onClick={connectWallet}
-                  disabled={isWalletConnecting || !!walletAddress}
+                  disabled={isWalletConnecting || isConnected}
                   className="flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
                 >
                   <Wallet className="h-4 w-4" />
