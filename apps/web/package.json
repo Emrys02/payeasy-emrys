@@ -56,6 +56,7 @@
         "sanitize-html": "^2.17.1",
         "sharp": "^0.34.5",
         "stellar-sdk": "^11.0.0",
+        "styled-jsx": "^5.1.1",
         "supercluster": "^8.0.1",
         "swr": "^2.4.0",
         "tailwind-merge": "^2.0.0",
