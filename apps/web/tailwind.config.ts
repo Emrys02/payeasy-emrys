@@ -110,6 +110,7 @@ const config: Config = {
         'scale-in': 'scaleIn 0.2s ease-out',
         'fade-in-up': 'fadeInUp 0.3s ease-out',
         'slide-in-right': 'slideInRight 0.3s ease-out',
+        'shimmer': 'shimmer 2s ease-in-out infinite',
       },
       keyframes: {
         slideUp: {
@@ -135,6 +136,10 @@ const config: Config = {
         slideInRight: {
           '0%': { transform: 'translateX(100%)' },
           '100%': { transform: 'translateX(0)' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
         },
       },
       // Mobile-friendly shadows
