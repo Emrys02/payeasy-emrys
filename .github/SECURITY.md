@@ -1,157 +1,109 @@
 # Security Policy
 
-## Reporting Vulnerability
+## Vulnerability Reporting
 
-If you discover a security vulnerability in PayEasy, please **DO NOT** create a public GitHub issue. Instead, please report it responsibly to our security team.
+If you discover a security vulnerability in PayEasy, please **do not** open a public GitHub issue. Instead, please report it via email to our security team at **security@payeasy.app** or through our [Security Advisory page](https://github.com/Ogstevyn/payeasy/security/advisories).
 
-### Report a Vulnerability
+### Reporting Guidelines
 
-Please send an email to **security@payeasy.app** with:
+1. **Description**: Clearly describe the vulnerability, including:
+   - What the vulnerability is
+   - Where it is located (file, function, line number if possible)
+   - How it can be exploited
+   - Potential impact
 
-- Description of the vulnerability
-- Steps to reproduce (if applicable)
-- Potential impact
-- Suggested fix (if applicable)
-- Your contact information for follow-up
+2. **Proof of Concept** (optional but helpful):
+   - Steps to reproduce
+   - Code snippet demonstrating the issue
+   - Screenshots or logs
 
-### Response Timeline
+3. **Your Contact Information**:
+   - Name or pseudonym
+   - Email address
+   - PGP key (if you want encrypted communication)
 
-- **Acknowledgment**: Within 24 hours
-- **Initial Assessment**: Within 48 hours
-- **Security Update Release**: Within 7 days for high-severity vulnerabilities
-- **Critical Vulnerabilities**: Emergency patch within 24 hours
+## Response Timeline
 
-## Vulnerability Management Process
+- **24 hours**: Acknowledgment of your report
+- **48 hours**: Assessment and initial response
+- **7 days** (Critical): Security patch release
+- **14 days** (High): Security patch release
+- **30 days** (Medium/Low): Security patch release or mitigation strategy
 
-### 1. Detection
+## Security Update Process
 
-We use multiple tools to detect vulnerabilities:
+1. **Patch Development**: Our security team develops and tests fixes
+2. **Review**: Code review and security validation
+3. **Release**: Push security update to main branch
+4. **Notification**: Users notified via GitHub Security Advisories
+5. **Monitoring**: Track patch adoption and effectiveness
 
-- **Dependabot**: Daily dependency scanning
-- **Snyk**: Continuous vulnerability monitoring
-- **CodeQL**: SAST (Static Application Security Testing)
-- **Semgrep**: Code pattern analysis
-- **Trivy**: Container image scanning
-- **OWASP ZAP**: DAST (Dynamic Application Security Testing)
+## SLA Definitions
 
-### 2. Classification
-
-Vulnerabilities are classified by severity:
-
-| Severity | CVSS | SLA | Action |
-|----------|------|-----|--------|
-| **Critical** | 9.0-10.0 | 24 hours | Immediate hotfix |
-| **High** | 7.0-8.9 | 48 hours | Priority patch |
-| **Medium** | 4.0-6.9 | 7 days | Regular update |
-| **Low** | 0.1-3.9 | 30 days | Next release |
-
-### 3. Assessment
-
-Each vulnerability is assessed for:
-
-- Exploitability
-- Applicability to our stack
-- Impact on production
-- Available patches
-- Breaking changes in patches
-
-### 4. Remediation
-
-- **Automated PRs**: Dependabot creates PRs automatically
-- **Manual Patching**: Security team reviews and merges critical patches
-- **Testing**: All patches undergo automated testing
-- **Deployment**: Fast-tracked to production with urgent PR review
-
-### 5. Communication
-
-- GitHub Security Advisories
-- Internal notification system
-- Public disclosure after fix is released
-- Post-incident review for critical issues
+| Severity | Response Time | Fix Target | Priority |
+|----------|---------------|-----------|----------|
+| **Critical** | 24 hours | 24 hours | P0 - Block everything |
+| **High** | 48 hours | 48 hours | P1 - Urgent |
+| **Medium** | 7 days | 7 days | P2 - Important |
+| **Low** | 30 days | 30 days | P3 - Standard |
 
 ## Security Best Practices
 
-### Dependency Management
+### For Developers
 
-- Keep dependencies up-to-date
-- Review breaking changes in major versions
-- Use lockfiles (package-lock.json, pnpm-lock.yaml)
-- Audit dependencies before adding: `npm audit`
-- Monitor transitive dependencies
+1. **Code Review**: All code must pass security review before merge
+2. **Dependencies**: Keep all dependencies up-to-date
+3. **Secrets**: Never commit secrets, API keys, or credentials
+   - Use environment variables
+   - Use GitHub Secrets for CI/CD
+   - Use `.env.local` for local development (never commit)
+4. **Input Validation**: Always validate and sanitize user input
+5. **Authentication**: Use industry-standard authentication protocols
+6. **Encryption**: Use TLS 1.2+ for all network communication
+7. **Error Handling**: Don't expose sensitive information in error messages
 
-### Code Review
+### For Users
 
-- Security-focused code review before merge
-- Automated scanning on all PRs
-- No hardcoded credentials or secrets
-- OWASP Top 10 awareness
+1. **Update Regularly**: Keep PayEasy and dependencies updated
+2. **Strong Passwords**: Use strong, unique passwords
+3. **Two-Factor Authentication**: Enable 2FA when available
+4. **Reporting**: Report suspicious activities immediately
+5. **Backups**: Maintain regular backups of critical data
 
-### Infrastructure Security
+## Supported Versions
 
-- Environment variable protection
-- No secrets in git history
-- HTTPS/TLS enforcement
-- Regular security headers validation
-- Container image scanning
+Only the latest version of PayEasy receives security updates. We recommend always running the latest version.
 
-### Development
+| Version | Status | Security Updates |
+|---------|--------|------------------|
+| Latest | Active | ✅ Yes |
+| Previous | EOL | ❌ No |
 
-- Use security-focused linters (ESLint security plugins)
-- Type safety (TypeScript strict mode)
-- Input validation on all endpoints
-- SQL injection prevention (parameterized queries)
-- XSS prevention (output encoding)
+## Security Tools & Scans
 
-## Patch Management SLA
+We use multiple security tools to ensure code safety:
 
-### Critical Vulnerabilities (CVSS 9.0-10.0)
-
-**SLA: 24 hours**
-
-- Automated alert triggered
-- All-hands review initiated
-- Emergency patch process activated
-- Hotfix deployed to production
-- Post-mortem scheduled
-
-### High Vulnerabilities (CVSS 7.0-8.9)
-
-**SLA: 48 hours**
-
-- Automated review initiated
-- Priority queue for patch creation
-- Expedited testing cycle
-- Regular merge process (fast-tracked)
-
-### Medium Vulnerabilities (CVSS 4.0-6.9)
-
-**SLA: 7 days**
-
-- Standard patch process
-- Included in regular updates
-- Monitored for exploits
-
-### Low Vulnerabilities (CVSS 0.1-3.9)
-
-**SLA: 30 days**
-
-- Grouped with other updates
-- No separate PR required
+- **CodeQL**: Source code analysis
+- **Snyk**: Dependency vulnerability scanning
+- **Semgrep**: Custom security pattern matching
+- **Trivy**: Container image scanning
+- **OWASP ZAP**: Dynamic application testing
+- **TruffleHog**: Secret detection
+- **FOSSA**: License compliance
 
 ## Compliance
 
-PayEasy maintains compliance with:
+PayEasy adheres to:
+- OWASP Top 10 security principles
+- CWE/SANS Top 25 mitigations
+- GDPR requirements for data protection
+- SOC 2 Type II standards
 
-- **GDPR**: Data protection regulations
-- **OWASP Top 10**: Industry security standards
-- **CWE Top 25**: Common weakness enumeration
-- **SOC 2**: Security and compliance standards
+## Questions?
 
-## Contact
-
-- **Security Issues**: security@payeasy.app
-- **General Questions**: contact@payeasy.app
+For security questions or concerns, contact: **security@payeasy.app**
 
 ---
 
-**Last Updated**: February 2026
+**Last Updated**: February 23, 2026
+**Version**: 1.0

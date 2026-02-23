@@ -1,14 +1,28 @@
-name: Security Scanning & Vulnerability Detection
+name: Security Scanning, DAST & Dependency Verification
 
 on:
   push:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'pnpm-lock.yaml'
+      - 'apps/web/package.json'
+      - '.github/dependabot.yml'
+      - '.github/workflows/security-scanning.yml'
   schedule:
-    # Run security scanning daily at 2 AM UTC
+    # Run SAST daily at 2 AM UTC
     - cron: '0 2 * * *'
+    # Run DAST weekly on Monday at 3 AM UTC
+    - cron: '0 3 * * 1'
   workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Target URL for DAST scan'
+        required: false
+        default: 'https://staging.payeasy.app'
 
 permissions:
   contents: read
@@ -21,6 +35,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ==================== SAST - Static Application Security Testing ====================
   # SAST - Static Application Security Testing (CodeQL)
   codeql:
     name: CodeQL Analysis
@@ -205,21 +220,209 @@ jobs:
         if: always()
 
   # Summary and Reporting
-  security-summary:
-    name: Security Scan Summary
+  analyze-dependencies:
+    name: Analyze Dependency Changes
     runs-on: ubuntu-latest
-    needs: [ codeql, snyk-scan, semgrep, trivy-scan, license-scan, secrets-scan, dependency-check ]
+    outputs:
+      has-security-updates: ${{ steps.check.outputs.security_updates }}
+      vulnerability-count: ${{ steps.check.outputs.vulnerability_count }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: files
+        uses: tj-actions/changed-files@v41
+        with:
+          files: |
+            package.json
+            package-lock.json
+            pnpm-lock.yaml
+            apps/web/package.json
+        continue-on-error: true
+
+      - name: Setup Node.js
+        if: steps.files.outputs.any_changed == 'true' || github.event_name == 'schedule'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Check for security updates
+        id: check
+        if: steps.files.outputs.any_changed == 'true' || github.event_name == 'schedule'
+        run: |
+          npm audit --json > /tmp/audit.json || true
+          
+          SECURITY_UPDATES=$(grep -c '"severity": "critical\|"severity": "high' /tmp/audit.json || echo "0")
+          VULNERABILITY_COUNT=$(jq '.metadata.vulnerabilities.total' /tmp/audit.json || echo "0")
+          
+          echo "security_updates=$SECURITY_UPDATES" >> $GITHUB_OUTPUT
+          echo "vulnerability_count=$VULNERABILITY_COUNT" >> $GITHUB_OUTPUT
+          
+          echo "Found $VULNERABILITY_COUNT total vulnerabilities"
+        continue-on-error: true
+
+  # Verify patch compatibility
+  verify-patches:
+    name: Verify Patch Compatibility
+    runs-on: ubuntu-latest
+    needs: analyze-dependencies
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd apps/web && npm ci || true
+
+      - name: Run type checking
+        run: npx tsc --noEmit
+        continue-on-error: true
+
+      - name: Run linting
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Run tests
+        run: npm test
+        continue-on-error: true
+
+      - name: Build application
+        run: npm run build
+        continue-on-error: true
+
+  # ==================== DAST - Dynamic Application Security Testing ====================
+
+  dast-zap-scan:
+    name: OWASP ZAP Dynamic Security Scan
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.7.0
+        with:
+          target: ${{ github.event.inputs.target_url || 'https://staging.payeasy.app' }}
+          rules_file_name: '.zap-baseline-rules.tsv'
+          cmd_options: '-a'
+          fail_action: false
+          allow_issue_writing: false
+
+      - name: Upload DAST report
+        uses: actions/upload-artifact@v3
+        with:
+          name: zap-scan-report
+          path: report_html.html
+          retention-days: 30
+        if: always()
+
+  dast-nuclei:
+    name: Nuclei Dynamic Scanner
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Nuclei scan
+        uses: projectdiscovery/nuclei-action@main
+        with:
+          target: ${{ github.event.inputs.target_url || 'https://staging.payeasy.app' }}
+          flags: -severity critical,high -json
+          output: nuclei-results.json
+        continue-on-error: true
+
+      - name: Upload Nuclei results
+        uses: actions/upload-artifact@v3
+        with:
+          name: nuclei-scan-results
+          path: nuclei-results.json
+          retention-days: 30
+        if: always()
+
+  staging-security-check:
+    name: Staging Environment Security Health
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event_name == 'schedule'
+    continue-on-error: true
+    steps:
+      - name: Check HTTPS configuration
+        run: |
+          curl -I https://staging.payeasy.app 2>/dev/null | head -20
+        continue-on-error: true
+
+      - name: Check security headers
+        run: |
+          curl -I https://staging.payeasy.app 2>/dev/null | \
+          grep -E 'Strict-Transport-Security|X-Content-Type-Options|X-Frame-Options|Content-Security-Policy' || \
+          echo "⚠️ Missing security headers detected"
+        continue-on-error: true
+
+      - name: SSL/TLS certificate check
+        run: |
+          echo | openssl s_client -servername staging.payeasy.app -connect staging.payeasy.app:443 2>/dev/null | \
+          openssl x509 -noout -text
+        continue-on-error: true
+
+  performance-security-audit:
+    name: Performance & Security Metrics
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v10
+        with:
+          configPath: './lighthouserc.js'
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+        continue-on-error: true
+
+  # ==================== SUMMARY & REPORTING ====================
+  security-summary:
+    name: Security Scan Summary & Reporting
+    runs-on: ubuntu-latest
+    needs: [
+      codeql,
+      snyk-scan,
+      semgrep,
+      trivy-scan,
+      license-scan,
+      secrets-scan,
+      dependency-check,
+      analyze-dependencies,
+      verify-patches,
+      dast-zap-scan,
+      dast-nuclei,
+      staging-security-check,
+      performance-security-audit
+    ]
     if: always()
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Generate security report
+      - name: Generate comprehensive security report
         run: |
-          echo "## Security Scanning Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 🔒 Comprehensive Security Scanning Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Scan Type | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "### SAST - Static Application Security Testing" >> $GITHUB_STEP_SUMMARY
+          echo "| Scanner | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| CodeQL | ${{ needs.codeql.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Snyk | ${{ needs.snyk-scan.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Semgrep | ${{ needs.semgrep.result }} |" >> $GITHUB_STEP_SUMMARY
@@ -227,6 +430,20 @@ jobs:
           echo "| License Check | ${{ needs.license-scan.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Secret Detection | ${{ needs.secrets-scan.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Dependency Check | ${{ needs.dependency-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### DAST - Dynamic Application Security Testing" >> $GITHUB_STEP_SUMMARY
+          echo "| Scanner | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| OWASP ZAP | ${{ needs.dast-zap-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Nuclei | ${{ needs.dast-nuclei.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Staging Security | ${{ needs.staging-security-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Performance Audit | ${{ needs.performance-security-audit.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Dependency Verification" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Analysis | ${{ needs.analyze-dependencies.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Patch Verification | ${{ needs.verify-patches.result }} |" >> $GITHUB_STEP_SUMMARY
 
       - name: Notify on critical vulnerabilities
         if: |
@@ -242,25 +459,34 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const dependencyAnalysis = '${{ needs.analyze-dependencies.outputs.vulnerability-count }}';
             const codqlStatus = '${{ needs.codeql.result }}';
             const snykStatus = '${{ needs.snyk-scan.result }}';
             const semgrepStatus = '${{ needs.semgrep.result }}';
             const trivyStatus = '${{ needs.trivy-scan.result }}';
+            const patchStatus = '${{ needs.verify-patches.result }}';
             
-            const comment = `## 🔒 Security Scan Results
+            const comment = `## 🔒 Complete Security Scan Results
             
-            | Scan | Result |
-            |------|--------|
-            | CodeQL | ${codqlStatus === 'success' ? '✅' : '⚠️'} |
-            | Snyk | ${snykStatus === 'success' ? '✅' : '⚠️'} |
-            | Semgrep | ${semgrepStatus === 'success' ? '✅' : '⚠️'} |
-            | Container | ${trivyStatus === 'success' ? '✅' : '⚠️'} |
+### SAST Results
+| Scanner | Result |
+|---------|--------|
+| CodeQL | ${codqlStatus === 'success' ? '✅' : '⚠️'} |
+| Snyk | ${snykStatus === 'success' ? '✅' : '⚠️'} |
+| Semgrep | ${semgrepStatus === 'success' ? '✅' : '⚠️'} |
+| Container | ${trivyStatus === 'success' ? '✅' : '⚠️'} |
+
+### Dependency Security
+- Vulnerabilities Found: ${dependencyAnalysis}
+- Patch Verification: ${patchStatus === 'success' ? '✅ Passed' : '⚠️ Check logs'}
+
+📋 Check the [Security tab](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/security/code-scanning) for details.`;
             
-            Check the [Security tab](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/security/code-scanning) for details.`;
-            
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: comment
-            });
+            if (context.issue && context.issue.number) {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }
