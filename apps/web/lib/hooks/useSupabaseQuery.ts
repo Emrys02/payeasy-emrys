@@ -49,7 +49,7 @@ export function useSupabaseQuery<T>(
     }
 
     fetchData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dependencies is optional; spread is intentional
   }, [table, query, ...(dependencies ?? [])])
 
   return { data, loading, error }

@@ -1,5 +1,9 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { runAuthMiddleware } from './middleware/middleware'
+import {
+  getSecurityHeaders,
+  CSP_REPORT_PATH,
+} from '@/lib/security/headers'
 import { logger } from './lib/logging/logger'
 import { monitoring } from './lib/monitoring/sentry'
 
@@ -13,37 +17,26 @@ export async function middleware(request: NextRequest) {
   logger.info({ reqId, method: request.method, url: pathname, ip, userAgent }, 'Incoming Request');
 
   try {
-    let supabaseResponse = NextResponse.next({ request });
+    const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set('x-nonce', nonce)
 
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value }) =>
-              request.cookies.set(name, value)
-            );
-            supabaseResponse = NextResponse.next({ request });
-            cookiesToSet.forEach(({ name, value, options }) =>
-              supabaseResponse.cookies.set(name, value, options)
-            );
-          },
-        },
-      }
-    );
+    const response = NextResponse.next({
+      request: { headers: requestHeaders },
+    })
 
-    // Refresh session if expired
-    const { data: { user } } = await supabase.auth.getUser();
+    const authResponse = await runAuthMiddleware(request, response)
 
-    // Protect dashboard routes
-    if (!user && pathname.startsWith('/dashboard')) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/login';
-      supabaseResponse = NextResponse.redirect(url);
+    const reportUri = new URL(CSP_REPORT_PATH, request.url).toString()
+    const isProduction = process.env.NODE_ENV === 'production'
+    const securityHeaders = getSecurityHeaders({
+      nonce,
+      reportUri,
+      isProduction,
+    })
+
+    for (const [name, value] of Object.entries(securityHeaders)) {
+      authResponse.headers.set(name, value)
     }
 
     const duration = Date.now() - start;
@@ -51,11 +44,11 @@ export async function middleware(request: NextRequest) {
       reqId,
       method: request.method,
       url: pathname,
-      status: supabaseResponse.status,
+      status: authResponse.status,
       duration
     }, 'Request Handled');
 
-    return supabaseResponse;
+    return authResponse
   } catch (error) {
     monitoring.captureException(error, { reqId, method: request.method, url: pathname });
     return NextResponse.next();

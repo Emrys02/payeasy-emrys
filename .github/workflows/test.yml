@@ -31,22 +31,12 @@ jobs:
           cache-dependency-path: './apps/web/package-lock.json'
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm ci
+          cd apps/web && npm ci
 
       - name: Run Jest tests with coverage
         run: npm run test:coverage -- --ci
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          directory: ./apps/web/coverage
-          fail_ci_if_error: true
-      - name: Run tests
-        run: npm run test
-
-      - name: Run tests
-        run: npm run test
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -61,3 +51,4 @@ jobs:
           name: jest-coverage-report
           path: ./apps/web/coverage/
           retention-days: 7
+

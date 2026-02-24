@@ -39,7 +39,8 @@ const formatTime = (timestamp: string) => {
 }
 
 export default function ConversationDetailPage() {
-    const { id } = useParams() as { id: string }
+    const params = useParams<{ id: string }>()
+    const id = params?.id ?? ''
     const [messages, setMessages] = useState<Message[]>([])
     const [currentUserId, setCurrentUserId] = useState<string>('')
     const [title, setTitle] = useState<string>('Conversation')
@@ -239,8 +240,8 @@ export default function ConversationDetailPage() {
                                 <article
                                     key={message.id}
                                     className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm sm:max-w-[75%] ${isCurrentUser
-                                            ? 'ml-auto bg-blue-600 text-white'
-                                            : 'mr-auto bg-slate-700 text-slate-100'
+                                        ? 'ml-auto bg-blue-600 text-white'
+                                        : 'mr-auto bg-slate-700 text-slate-100'
                                         }`}
                                 >
                                     {!isCurrentUser && message.senderName ? (
